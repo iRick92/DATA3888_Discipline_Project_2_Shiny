@@ -98,8 +98,8 @@ ui <- dashboardPage(
                         valueBoxOutput("test3"),  # --------------
                         valueBoxOutput("test4"),  # --------------
                         valueBoxOutput("test5"),  # --------------
-                        DT::dataTableOutput("gse_table")   # --- Need to add this back in if want to use gse
-                        
+                        DT::dataTableOutput("gse_table"),   # --- Need to add this back in if want to use gse
+                        DT::dataTableOutput("gse_table_rejection_status")
                     )
                 )
             ), # End Calculator Tab
@@ -181,6 +181,16 @@ server <- function(input, output) {
     gse_var = reactive({
       return(read.csv("data/GSE107509_var.csv"))
     })
+    
+    
+    gse_rejection_status = reactive({
+      return(read.csv("data/rejection_status_GSE107509.txt"))
+    })
+    
+    output$gse_table_rejection_status <- DT::renderDataTable({
+      return(gse_rejection_status())
+    })
+    
     
     output$gse_table_mean <- DT::renderDataTable({
       return(data.frame(gse_mean(), Var = gse_var()$Var))
