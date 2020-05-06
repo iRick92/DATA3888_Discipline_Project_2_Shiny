@@ -131,7 +131,10 @@ ui <- dashboardPage(
                     
             ),
             tabItem(tabName = "model_details",
-                    DT::dataTableOutput("gse_table_mean")
+                    DT::dataTableOutput("gse_table_mean"),
+                    DT::dataTableOutput("gse_table_var"),
+                    DT::dataTableOutput("gse_table_mean_var")
+                    
             )
         )
     )
@@ -193,6 +196,14 @@ server <- function(input, output) {
     
     
     output$gse_table_mean <- DT::renderDataTable({
+      return(data.frame(gse_mean()))
+    })
+    
+    output$gse_table_var <- DT::renderDataTable({
+      return(data.frame(gse_var()))
+    })
+    
+    output$gse_table_mean_var <- DT::renderDataTable({
       return(data.frame(gse_mean(), Var = gse_var()$Var))
     })
     
