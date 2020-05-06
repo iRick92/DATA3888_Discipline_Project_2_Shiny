@@ -241,6 +241,53 @@ table(combined_df$comparison)
 ```
 
 
+```{r}
+
+# Convert into 6*100 samples and 1*59 samples of 50K+ genes
+
+subset = as.data.frame(gse[,601:659])
+rownames(subset) = gene_names
+
+write.csv(subset, 'data/GSE107509_Split/GSE107509_Part7.txt', row.names = FALSE)
+
+
+```
+
+```{r}
+
+# Concatenating the files
+
+# Directory for GSE107509
+directory = "data/GSE107509_Split/"
+
+# Read in the files
+fileNames <- list.files(directory)
+
+# Read in all files to make a table
+GSE107509 = as.data.frame(readr::read_csv("data/GSE107509_Split/GSE107509_GeneNames.txt"))
+
+# Skip First (GeneName) data
+for(i in 2:length(fileNames)){
+print(fileNames[i])
+  temptable <- readr::read_csv(file.path(directory, fileNames[i]))
+  # Concatenate the second column (This particular person)
+  GSE107509 <- cbind(GSE107509, temptable)
+}
+
+# Get gene names
+gene_names = GSE107509$Gene
+
+# Remove first column - The X column we saved
+GSE107509 = GSE107509[,-1]
+
+# Set gene names as rows
+rownames(GSE107509) = gene_names
+
+
+
+```
+
+
 
 https://stats.stackexchange.com/questions/258938/pca-before-random-forest-regression-provide-better-predictive-scores-for-my-data/258942
 

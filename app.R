@@ -92,13 +92,17 @@ ui <- dashboardPage(
                         width = 8,
                         status = "primary",
                         
-                        valueBoxOutput("name"),  # --------------
-                        valueBoxOutput("test1"),  # --------------
-                        valueBoxOutput("test2"),  # --------------
-                        valueBoxOutput("test3"),  # --------------
-                        valueBoxOutput("test4"),  # --------------
-                        valueBoxOutput("test5"),  # --------------
-                        DT::dataTableOutput("gse_table"),   # --- Need to add this back in if want to use gse
+                        h3("Top 6 Genes (By Variance)"),
+                        DT::dataTableOutput("top_6_var_table"),
+                        
+                        valueBoxOutput("top1"),  # --------------
+                        valueBoxOutput("top2"),  # --------------
+                        valueBoxOutput("top3"),  # --------------
+                        valueBoxOutput("top4"),  # --------------
+                        valueBoxOutput("top5"),  # --------------
+                        valueBoxOutput("top6"),  # --------------
+                        
+                        DT::dataTableOutput("GSE107509_Table"),   # --- Need to add this back in if want to use gse
                         DT::dataTableOutput("gse_table_rejection_status")
                     )
                 )
@@ -113,7 +117,7 @@ ui <- dashboardPage(
                         
                         # Select Number of Correlations 
                         sliderInput("corr_number", "Number correlations (First n/54715):",
-                                    min = 0, max = 100, value = 10),
+                                    min = 0, max = 50, value = 5),
                         
                         plotOutput(outputId = "corrplot")
                     ),
@@ -143,51 +147,104 @@ ui <- dashboardPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
     
-    gse = reactive({
-        
-        # Load gse data
-        print("Loading")
-        progress <- shiny::Progress$new()
-        progress$set(message = "Loading Gene Expression Data", value = 0)
-        Sys.sleep(1)
-        progress$inc(0.25, detail = "(May take a min)")
-        
-        gse = readr::read_csv("data/GSE107509_RAW/GSE107509_Matrix.txt")
-        
-        # Get gene names
-        gene_names = gse$Gene
-        progress$inc(0.25, detail = "Getting Gene Names")
-        Sys.sleep(1)
-        
-        # Remove first column - The X column we saved
-        gse = gse[,-1]
-        progress$inc(0.25, detail = "Removing X Column")
-        Sys.sleep(1)
-        
-        # Set row names as gene names
-        rownames(gse) = gene_names
-        progress$inc(0.25, detail = "Setting Row Names")
-        Sys.sleep(1)
-        
-        progress$inc(1, detail = "Done")
-        #progress$close()
-        print("Done")
-        return(as.data.frame(gse))
+    # Gene Expression Data for 659 samples
+    GSE107509 = reactive({
+      
+      # Start progress bar
+      progress <- shiny::Progress$new()
+      progress$set(message = "Loading Gene Expression Data", value = 0)
+      
+      # Directory for GSE107509
+      directory = "data/GSE107509_Split/"
+      
+      # Read in the files
+      fileNames <- list.files(directory)
+      
+      # Read in all files to make a table
+      GSE107509 = as.data.frame(readr::read_csv("data/GSE107509_Split/GSE107509_GeneNames.txt"))
+      
+      # Skip First (GeneName) data
+      for(i in 2:length(fileNames)){
+        print(fileNames[i])
+        progress$inc(1/7, detail = "Concatenating")
+        temptable <- readr::read_csv(file.path(directory, fileNames[i]))
+        # Concatenate the second column (This particular person)
+        GSE107509 <- cbind(GSE107509, temptable)
+      }
+      
+      # Get gene names
+      gene_names = GSE107509$Gene
+      
+      # Remove first column - The X column we saved
+      GSE107509 = GSE107509[,-1]
+      
+      # Set gene names as rows
+      rownames(GSE107509) = gene_names
+      
+      return(GSE107509)
+      
     })
     
+    # Transposes Gene Expression Data
+    GSE107509_t = reactive({
+      progress <- shiny::Progress$new()
+      progress$set(message = "Transposing GSE107509", value = 0)
+      
+      gse_transpose = as.data.frame(t(GSE107509()))
+      
+      progress$inc(1, detail = "Done")
+      return(gse_transpose)
+      
+    })
     
+    # Mean for each gene
     gse_mean = reactive({
       return(read.csv("data/GSE107509_mean.csv"))
     })
-  
     
+    # Var for each gene
     gse_var = reactive({
       return(read.csv("data/GSE107509_var.csv"))
     })
     
-    
+    # Rejection Status for each sample
     gse_rejection_status = reactive({
       return(read.csv("data/rejection_status_GSE107509.txt"))
+    })
+    
+    # Top 6 gene variances
+    top_6_var = reactive({
+      return(gse_var() %>% arrange(desc(Var))  %>% head(6))
+    })
+    
+    # Gets data from uploaded file
+    uploaded_file = reactive({
+      
+      # input$file1 will be NULL initially. After the user selects
+      # and uploads a file, head of that data file by default,
+      # or all rows if selected, will be shown.
+      req(input$file1)
+      
+      progress <- shiny::Progress$new()
+      progress$set(message = "Loading Data", value = 0)
+      
+      df <- read.csv(input$file1$datapath,
+                     header = input$header,
+                     sep = input$sep)
+      progress$inc(1, detail = "Done")
+      #progress$close()
+      
+      return(df)
+    })
+    
+    
+    
+    output$GSE107509_Table <- DT::renderDataTable({
+      return(GSE107509())
+    })
+    
+    output$top_6_var_table <- DT::renderDataTable({
+      return(top_6_var())
     })
     
     output$gse_table_rejection_status <- DT::renderDataTable({
@@ -213,30 +270,10 @@ server <- function(input, output) {
         print("Clicked Button")
         gse()
     })
-    
-    
-    fetch_data_frame = reactive({
-        
-        # input$file1 will be NULL initially. After the user selects
-        # and uploads a file, head of that data file by default,
-        # or all rows if selected, will be shown.
-        req(input$file1)
-        
-        progress <- shiny::Progress$new()
-        progress$set(message = "Loading Data", value = 0)
-        
-        df <- read.csv(input$file1$datapath,
-                       header = input$header,
-                       sep = input$sep)
-        progress$inc(1, detail = "Done")
-        #progress$close()
-        
-        return(df)
-    })
 
     output$contents <- DT::renderDataTable({
         print("Loading Selected File")
-        return(fetch_data_frame())
+        return(uploaded_file())
     })
     
     output$gse_table <- DT::renderDataTable({
@@ -244,47 +281,190 @@ server <- function(input, output) {
         return(gse())
     })
     
-    output$name <- renderValueBox({
-        valueBox(
-            as.character(colnames(fetch_data_frame())[2]), "Patient Name", icon = icon("thumbs-up", lib = "glyphicon"),
-            color = "red"
-        )
+    
+    # --- Top 6 Genes:
+    
+    get_top_1_gene = reactive({
+      
+      val = uploaded_file() %>% filter(Gene == "224588_PM_at")
+      
+      print(val)
+      val = val$Value[1]
+      
+      print(val)
+      
+      return(val)
+      
     })
     
-    output$test1 <- renderValueBox({
+    output$top1 <- renderValueBox({
+      
+      # Get top gene variance (1)
+      gene = top_6_var()$Gene[1]
+      
+      # Get the value of the gene expression for this sample
+      this_gene_value = uploaded_file() %>% filter(Gene == "224588_PM_at")
+      this_gene_value = round(this_gene_value$Value[1],4)
+      
+      # Get the mean value gene expression
+      mean_gene_value = round(top_6_var()$Var[1], 4)
+      
+      # Value box visualisation based on if this > mean or <
+      if (this_gene_value > mean_gene_value) {
         valueBox(
-            as.character(fetch_data_frame()[22,1]), as.character(fetch_data_frame()[22,2]), icon = icon("thumbs-up", lib = "glyphicon"),
-            color = "red"
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-up", lib = "font-awesome"),
+          color = "green"
         )
-    })
-    output$test2 <- renderValueBox({
+      }
+      else {
         valueBox(
-            as.character(fetch_data_frame()[23,1]), as.character(fetch_data_frame()[23,2]), icon = icon("thumbs-up", lib = "glyphicon"),
-            color = "green"
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-down", lib = "font-awesome"),
+          color = "red"
         )
+      }
     })
-    output$test3 <- renderValueBox({
+    
+    output$top2 <- renderValueBox({
+      
+      # Get top gene variance (2)
+      gene = top_6_var()$Gene[2]
+      
+      # Get the value of the gene expression for this sample
+      this_gene_value = uploaded_file() %>% filter(Gene == gene)
+      this_gene_value = round(this_gene_value$Value[1],4)
+      
+      # Get the mean value gene expression
+      mean_gene_value = round(top_6_var()$Var[2], 4)
+      
+      # Value box visualisation based on if this > mean or <
+      if (this_gene_value > mean_gene_value) {
         valueBox(
-            as.character(fetch_data_frame()[24,1]), as.character(fetch_data_frame()[24,2]), icon = icon("thumbs-up", lib = "glyphicon"),
-            color = "black"
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-up", lib = "font-awesome"),
+          color = "green"
         )
-    })
-    output$test4 <- renderValueBox({
+      }
+      else {
         valueBox(
-            as.character(fetch_data_frame()[25,1]), as.character(fetch_data_frame()[25,2]), icon = icon("thumbs-up", lib = "glyphicon"),
-            color = "black"
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-down", lib = "font-awesome"),
+          color = "red"
         )
+      }
     })
-    output$test5 <- renderValueBox({
+    
+    output$top3 <- renderValueBox({
+      
+      # Get top gene variance (3)
+      gene = top_6_var()$Gene[3]
+      
+      # Get the value of the gene expression for this sample
+      this_gene_value = uploaded_file() %>% filter(Gene == gene)
+      this_gene_value = round(this_gene_value$Value[1],4)
+      
+      # Get the mean value gene expression
+      mean_gene_value = round(top_6_var()$Var[3], 4)
+      
+      # Value box visualisation based on if this > mean or <
+      if (this_gene_value > mean_gene_value) {
         valueBox(
-            as.character(fetch_data_frame()[26,1]), as.character(fetch_data_frame()[26,2]), icon = icon("thumbs-up", lib = "glyphicon"),
-            color = "black"
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-up", lib = "font-awesome"),
+          color = "green"
         )
+      }
+      else {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-down", lib = "font-awesome"),
+          color = "red"
+        )
+      }
     })
+    
+    output$top4 <- renderValueBox({
+      
+      # Get top gene variance (4)
+      gene = top_6_var()$Gene[4]
+      
+      # Get the value of the gene expression for this sample
+      this_gene_value = uploaded_file() %>% filter(Gene == gene)
+      this_gene_value = round(this_gene_value$Value[1],4)
+      
+      # Get the mean value gene expression
+      mean_gene_value = round(top_6_var()$Var[4], 4)
+      
+      # Value box visualisation based on if this > mean or <
+      if (this_gene_value > mean_gene_value) {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-up", lib = "font-awesome"),
+          color = "green"
+        )
+      }
+      else {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-down", lib = "font-awesome"),
+          color = "red"
+        )
+      }
+    })
+    
+    output$top5 <- renderValueBox({
+      
+      # Get top gene variance (5)
+      gene = top_6_var()$Gene[5]
+      
+      # Get the value of the gene expression for this sample
+      this_gene_value = uploaded_file() %>% filter(Gene == gene)
+      this_gene_value = round(this_gene_value$Value[1],4)
+      
+      # Get the mean value gene expression
+      mean_gene_value = round(top_6_var()$Var[5], 4)
+      
+      # Value box visualisation based on if this > mean or <
+      if (this_gene_value > mean_gene_value) {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-up", lib = "font-awesome"),
+          color = "green"
+        )
+      }
+      else {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-down", lib = "font-awesome"),
+          color = "red"
+        )
+      }
+    })
+    
+    output$top6 <- renderValueBox({
+      
+      # Get top gene variance (6)
+      gene = top_6_var()$Gene[6]
+      
+      # Get the value of the gene expression for this sample
+      this_gene_value = uploaded_file() %>% filter(Gene == gene)
+      this_gene_value = round(this_gene_value$Value[1],4)
+      
+      # Get the mean value gene expression
+      mean_gene_value = round(top_6_var()$Var[6], 4)
+      
+      # Value box visualisation based on if this > mean or <
+      if (this_gene_value > mean_gene_value) {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-up", lib = "font-awesome"),
+          color = "green"
+        )
+      }
+      else {
+        valueBox(
+          this_gene_value, paste0("GENE: ", gene), icon = icon("chevron-down", lib = "font-awesome"),
+          color = "red"
+        )
+      }
+    })
+    
+    
+    # --- 
     
     
     output$corrplot = renderPlot({
-        cor_matrix<-cor(gse_t[1:input$corr_number])
+        cor_matrix<-cor(GSE107509_t()[1:input$corr_number])
         diag(cor_matrix)<-0
         return(corrplot(cor_matrix, method="square"))
     })
@@ -292,7 +472,7 @@ server <- function(input, output) {
     
     output$gene_expression_comparison_boxplot = renderPlot({
       
-      p <- ggplot(melt(gse()[,c(input$sample_number1, input$sample_number2)]), aes(x=variable, y=value)) +  
+      p <- ggplot(melt(GSE107509()[,c(input$sample_number1, input$sample_number2)]), aes(x=variable, y=value)) +  
         geom_boxplot(outlier.colour="black", outlier.shape=16,
                      outlier.size=0.5, notch=FALSE) +
         theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
