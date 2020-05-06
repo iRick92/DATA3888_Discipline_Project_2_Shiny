@@ -169,7 +169,7 @@ server <- function(input, output) {
         progress$inc(1, detail = "Done")
         #progress$close()
         print("Done")
-        return(gse)
+        return(as.data.frame(gse))
     })
     
     
