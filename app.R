@@ -174,12 +174,12 @@ server <- function(input, output) {
     
     
     gse_mean = reactive({
-      return(read.csv("data/GSE107509_mean.csv"))
+      return(read.csv("data/GSE107509_mean.txt"))
     })
   
     
     gse_var = reactive({
-      return(read.csv("data/GSE107509_var.csv"))
+      return(read.csv("data/GSE107509_var.txt"))
     })
     
     
